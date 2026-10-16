@@ -68,7 +68,7 @@ th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-b
 <button type="submit" id="saveButton">Enregistrer le site</button><button type="button" class="secondary hidden" id="cancelEdit">Annuler la modification</button>
 </form></section>
 <section class="section"><h2>📊 Mes sites</h2>
-<div class="toolbar"><input id="search" placeholder="Rechercher un site..."><select id="filterStatus" style="max-width:200px"><option value="">Tous les statuts</option><option>À tester</option><option>En test</option><option>Fiable</option><option>À vérifier</option><option>Abandonné</option></select><button class="secondary" id="exportCsv">Exporter CSV</button></div>
+<div class="toolbar"><input id="search" placeholder="Rechercher un site..."><select id="filterStatus" style="max-width:200px"><option value="">Tous les statuts</option><option>À tester</option><option>En test</option><option>Fiable</option><option>À vérifier</option><option>Abandonné</option></select><button class="secondary" id="exportCsv">Exporter CSV</button><button class="secondary" id="importCsv">Importer CSV</button><input id="importCsvFile" type="file" accept=".csv,text/csv" hidden></div>
 <div class="table-wrap"><table><thead><tr><th>Site</th><th>Statut</th><th>Temps suivi</th><th>Récompenses</th><th>Actions</th></tr></thead><tbody id="siteRows"></tbody></table></div>
 <p class="small">Les récompenses, frais et paiements sont les montants que tu saisis manuellement.</p></section>
 <section class="section"><h2>⏱️ Session de travail</h2><div id="sessionSite" class="muted">Aucun site sélectionné.</div><div id="timer">00:00:00</div>
@@ -79,6 +79,6 @@ th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-b
 </div>
 </main><footer>Panel 2.0 · Gestion personnelle des tests et récompenses</footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./app.js?v=5a982892"></script>
+<script src="./app.js?v=csvimport"></script>
 </body>
 </html>
