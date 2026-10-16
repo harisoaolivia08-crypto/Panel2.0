@@ -107,7 +107,7 @@ create policy rewards_delete_own on public.reward_transactions for delete to aut
 create policy audit_select_own on public.audit_events for select to authenticated using (user_id=(select auth.uid()));
 
 create or replace function public.start_session(p_site_id uuid)
-returns public.sessions language plpgsql security invoker set search_path=''
+returns public.sessions language plpgsql security definer set search_path=''
 as $$
 declare v_user uuid:=auth.uid(); v_session public.sessions;
 begin
@@ -120,7 +120,7 @@ begin
 end; $$;
 
 create or replace function public.pause_session(p_session_id uuid)
-returns public.sessions language plpgsql security invoker set search_path=''
+returns public.sessions language plpgsql security definer set search_path=''
 as $$
 declare v_user uuid:=auth.uid(); v_session public.sessions;
 begin
@@ -136,7 +136,7 @@ begin
 end; $$;
 
 create or replace function public.resume_session(p_session_id uuid)
-returns public.sessions language plpgsql security invoker set search_path=''
+returns public.sessions language plpgsql security definer set search_path=''
 as $$
 declare v_user uuid:=auth.uid(); v_session public.sessions;
 begin
@@ -150,7 +150,7 @@ begin
 end; $$;
 
 create or replace function public.finish_session(p_session_id uuid)
-returns public.sessions language plpgsql security invoker set search_path=''
+returns public.sessions language plpgsql security definer set search_path=''
 as $$
 declare v_user uuid:=auth.uid(); v_session public.sessions;
 begin
