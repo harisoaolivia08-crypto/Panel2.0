@@ -34,7 +34,7 @@ th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-b
 <main>
 <section id="authPanel" class="auth-panel">
 <h2>Connexion à Panel 2.0</h2>
-<p class="muted">Tes sites, sessions et récompenses seront enregistrés dans ton compte en ligne.</p>
+<p class="muted">Connecte-toi ou crée un compte pour enregistrer tes sites, sessions et récompenses dans Supabase et les retrouver sur tes autres appareils.</p>
 <div class="fields">
 <div><label for="displayName">Nom affiché (inscription)</label><input id="displayName" autocomplete="name" maxlength="100" placeholder="Ton nom"></div>
 <div><label for="authEmail">Adresse e-mail</label><input id="authEmail" type="email" autocomplete="email" required placeholder="toi@exemple.com"></div>
@@ -75,7 +75,7 @@ th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-b
 <div class="toolbar"><button id="startSession" disabled>▶ Démarrer</button><button id="pauseSession" class="secondary" disabled>⏸ Pause</button><button id="resumeSession" class="success" disabled>▶ Reprendre</button><button id="finishSession" class="danger" disabled>■ Terminer</button></div>
 <p class="small">Le chronomètre mesure le temps actif. Il ne vérifie pas l'activité réelle sur le site.</p></section>
 <section class="section"><h2>🌐 Navigateur intégré</h2><p class="small">Certains sites refusent l'affichage intégré. Dans ce cas, utilise « Ouvrir » dans la liste des sites.</p><div class="toolbar"><button id="openExternal" class="secondary">Ouvrir dans un nouvel onglet</button></div><iframe id="viewer" title="Site sélectionné" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe></section>
-<section class="section"><h2>💾 Sauvegarde et données</h2><div class="toolbar"><button id="exportJson">Télécharger la sauvegarde JSON</button><button class="secondary" id="importButton">Importer une sauvegarde</button><input type="file" id="importFile" accept=".json,application/json" class="hidden"><button class="danger" id="clearData">Tout effacer</button></div><p class="small">Les données restent dans le stockage local de ce navigateur. Exporte régulièrement une sauvegarde pour éviter de les perdre.</p></section>
+<section class="section"><h2>💾 Sauvegarde et données</h2><div class="toolbar"><button id="exportJson">Télécharger la sauvegarde JSON</button><button class="secondary" id="importButton">Importer une sauvegarde</button><input type="file" id="importFile" accept=".json,application/json" class="hidden"><button class="danger" id="clearData">Tout effacer</button></div><p class="small">Les données enregistrées après connexion sont stockées dans Supabase et associées à ton compte. Tu peux aussi télécharger une sauvegarde JSON pour conserver une copie.</p></section>
 </div>
 </main><footer>Panel 2.0 · Gestion personnelle des tests et récompenses</footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
