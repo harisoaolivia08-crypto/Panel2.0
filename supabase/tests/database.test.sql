@@ -1,0 +1,16 @@
+begin;
+select plan(12);
+select has_table('public','profiles','profiles table exists');
+select has_table('public','sites','sites table exists');
+select has_table('public','sessions','sessions table exists');
+select has_table('public','reward_transactions','reward transactions table exists');
+select has_table('public','audit_events','audit events table exists');
+select has_column('public','sites','user_id','sites have an owner');
+select has_column('public','sessions','elapsed_seconds','sessions persist elapsed time');
+select has_column('public','reward_transactions','currency','transactions store currency');
+select ok((select relrowsecurity from pg_class where oid='public.sites'::regclass),'RLS enabled on sites');
+select ok((select relrowsecurity from pg_class where oid='public.sessions'::regclass),'RLS enabled on sessions');
+select ok((select relrowsecurity from pg_class where oid='public.reward_transactions'::regclass),'RLS enabled on transactions');
+select has_function('public','start_session',array['uuid'],'session start RPC exists');
+select * from finish();
+rollback;
