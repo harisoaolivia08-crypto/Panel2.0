@@ -25,11 +25,26 @@ th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-b
 #timer{font-size:32px;font-weight:bold;margin:12px 0}#viewer{width:100%;height:480px;border:1px solid var(--border);border-radius:10px;background:white}
 .small{font-size:12px;color:var(--muted)}.hidden{display:none!important}footer{text-align:center;color:var(--muted);padding:20px;font-size:12px}
 @media(max-width:760px){main{padding:12px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fields{grid-template-columns:1fr}header{padding:17px}#viewer{height:350px}.stat{font-size:22px}}
+
+.auth-panel{max-width:520px;margin:26px auto;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px}.auth-panel h2{margin-bottom:8px}.auth-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.auth-message{min-height:22px;font-size:13px;margin-top:12px;color:#8af0c5}.userbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px;padding:10px 13px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
 </style>
 </head>
 <body>
 <header><h1>⚡ Panel 2.0</h1><p>Gestion des sites · Sessions · Récompenses · Statistiques</p></header>
 <main>
+<section id="authPanel" class="auth-panel">
+<h2>Connexion à Panel 2.0</h2>
+<p class="muted">Tes sites, sessions et récompenses seront enregistrés dans ton compte en ligne.</p>
+<div class="fields">
+<div><label for="displayName">Nom affiché (inscription)</label><input id="displayName" autocomplete="name" maxlength="100" placeholder="Ton nom"></div>
+<div><label for="authEmail">Adresse e-mail</label><input id="authEmail" type="email" autocomplete="email" required placeholder="toi@exemple.com"></div>
+<div style="grid-column:1/-1"><label for="authPassword">Mot de passe (8 caractères minimum)</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" required placeholder="Mot de passe"></div>
+</div>
+<div class="auth-actions"><button id="signIn">Se connecter</button><button id="signUp" class="success">Créer un compte</button></div>
+<p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+</section>
+<div id="appContent" class="hidden">
+<div class="userbar"><span>Compte connecté : <strong id="userLabel"></strong></span><button id="signOut" class="secondary">Se déconnecter</button></div>
 <div class="grid">
 <div class="card"><div class="stat-label">Sites enregistrés</div><div class="stat" id="statSites">0</div></div>
 <div class="card"><div class="stat-label">Temps total suivi</div><div class="stat" id="statTime">00:00:00</div></div>
@@ -61,66 +76,9 @@ th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-b
 <p class="small">Le chronomètre mesure le temps actif. Il ne vérifie pas l'activité réelle sur le site.</p></section>
 <section class="section"><h2>🌐 Navigateur intégré</h2><p class="small">Certains sites refusent l'affichage intégré. Dans ce cas, utilise « Ouvrir » dans la liste des sites.</p><div class="toolbar"><button id="openExternal" class="secondary">Ouvrir dans un nouvel onglet</button></div><iframe id="viewer" title="Site sélectionné" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe></section>
 <section class="section"><h2>💾 Sauvegarde et données</h2><div class="toolbar"><button id="exportJson">Télécharger la sauvegarde JSON</button><button class="secondary" id="importButton">Importer une sauvegarde</button><input type="file" id="importFile" accept=".json,application/json" class="hidden"><button class="danger" id="clearData">Tout effacer</button></div><p class="small">Les données restent dans le stockage local de ce navigateur. Exporte régulièrement une sauvegarde pour éviter de les perdre.</p></section>
+</div>
 </main><footer>Panel 2.0 · Gestion personnelle des tests et récompenses</footer>
-<script>
-"use strict";
-const STORAGE_KEY="panel20Data";const $=id=>document.getElementById(id);
-let data=loadData(),selectedId=null,session=data.session||null,timerInterval=null;
-function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
-function loadData(){try{const p=JSON.parse(localStorage.getItem(STORAGE_KEY)||"null");return p&&Array.isArray(p.sites)?{sites:p.sites,session:p.session||null}:{sites:[],session:null}}catch{return{sites:[],session:null}}}
-function saveData(){data.session=session;localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}
-function safeUrl(v){try{const u=new URL(v);return["http:","https:"].includes(u.protocol)?u.href:""}catch{return""}}
-function getSite(id){return data.sites.find(s=>s.id===id)}
-function elapsedFor(s){return Number(s.totalSeconds||0)}
-function sessionSeconds(){if(!session)return 0;return Number(session.elapsed||0)+(session.running?Math.max(0,Math.floor((Date.now()-session.startedAt)/1000)):0)}
-function formatTime(n){n=Math.max(0,Math.floor(n||0));return[String(Math.floor(n/3600)).padStart(2,"0"),String(Math.floor(n%3600/60)).padStart(2,"0"),String(n%60).padStart(2,"0")].join(":")}
-function fmtAmount(n){return Number(n||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:8})}
-function total(k){return data.sites.reduce((a,s)=>a+Number(s[k]||0),0)}
-function makeButton(label,cls,fn){const b=document.createElement("button");b.type="button";b.className=cls;b.textContent=label;b.addEventListener("click",fn);return b}
-function render(){
-$("statSites").textContent=data.sites.length;
-$("statTime").textContent=formatTime(data.sites.reduce((a,s)=>a+elapsedFor(s),0)+(session?sessionSeconds():0));
-$("statRewards").textContent=fmtAmount(total("reward"));$("statPaid").textContent=fmtAmount(total("paid"));
-const q=$("search").value.trim().toLowerCase(),st=$("filterStatus").value;
-const sites=data.sites.filter(s=>(!q||[s.name,s.url,s.goal,s.wallet,s.notes].join(" ").toLowerCase().includes(q))&&(!st||s.status===st));
-const tbody=$("siteRows");tbody.replaceChildren();
-if(!sites.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="Aucun site trouvé. Ajoute ton premier site ci-dessus.";td.className="muted";tr.appendChild(td);tbody.appendChild(tr)}
-sites.forEach(s=>{
-const tr=document.createElement("tr"),name=document.createElement("td"),strong=document.createElement("strong");strong.textContent=s.name;name.appendChild(strong);name.appendChild(document.createElement("br"));
-const link=document.createElement("a");link.href=safeUrl(s.url)||"#";link.target="_blank";link.rel="noopener noreferrer";link.textContent=s.url;link.addEventListener("click",e=>{if(!safeUrl(s.url))e.preventDefault()});name.appendChild(link);
-if(s.goal){const p=document.createElement("p");p.className="small";p.textContent=s.goal;name.appendChild(p)}
-const statusTd=document.createElement("td"),badge=document.createElement("span");badge.className="badge "+(s.status==="Fiable"?"active":(["À vérifier","Abandonné"].includes(s.status)?"error":""));badge.textContent=s.status||"À tester";statusTd.appendChild(badge);
-const timeTd=document.createElement("td");timeTd.textContent=formatTime(elapsedFor(s)+(session&&session.siteId===s.id?sessionSeconds():0));
-const rewardTd=document.createElement("td");rewardTd.textContent=fmtAmount(s.reward);
-const actions=document.createElement("td");actions.append(makeButton("Sélectionner","secondary",()=>selectSite(s.id)),makeButton("Modifier","secondary",()=>editSite(s.id)),makeButton("Supprimer","danger",()=>deleteSite(s.id)));
-tr.append(name,statusTd,timeTd,rewardTd,actions);tbody.appendChild(tr)
-});
-if(session){const s=getSite(session.siteId);$("sessionSite").textContent=s?"Site : "+s.name+(session.running?" — session active":" — en pause"):"Site supprimé";$("timer").textContent=formatTime(sessionSeconds());$("startSession").disabled=true;$("pauseSession").disabled=!session.running;$("resumeSession").disabled=session.running;$("finishSession").disabled=false}
-else{$("sessionSite").textContent=selectedId&&getSite(selectedId)?"Site sélectionné : "+getSite(selectedId).name:"Aucun site sélectionné.";$("timer").textContent="00:00:00";$("startSession").disabled=!selectedId;$("pauseSession").disabled=true;$("resumeSession").disabled=true;$("finishSession").disabled=true}
-}
-function selectSite(id){selectedId=id;const s=getSite(id);if(s&&safeUrl(s.url))$("viewer").src=safeUrl(s.url);render()}
-function resetForm(){$("siteForm").reset();$("editId").value="";$("siteReward").value=0;$("siteFees").value=0;$("sitePaid").value=0;$("formTitle").textContent="＋ Ajouter un site";$("saveButton").textContent="Enregistrer le site";$("cancelEdit").classList.add("hidden")}
-$("siteForm").addEventListener("submit",e=>{e.preventDefault();const name=$("siteName").value.trim(),url=safeUrl($("siteUrl").value.trim());if(!name||!url){alert("Saisis un nom et une URL valide commençant par http:// ou https://.");return}
-const id=$("editId").value,old=id?getSite(id):null,s={id:id||uid(),name,url,goal:$("siteGoal").value.trim(),wallet:$("siteWallet").value.trim(),status:$("siteStatus").value,reward:Math.max(0,Number($("siteReward").value)||0),fees:Math.max(0,Number($("siteFees").value)||0),paid:Math.max(0,Number($("sitePaid").value)||0),notes:$("siteNotes").value.trim(),totalSeconds:old?Number(old.totalSeconds||0):0,createdAt:old?old.createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
-if(old)data.sites=data.sites.map(x=>x.id===id?s:x);else data.sites.push(s);selectedId=s.id;saveData();resetForm();render()});
-function editSite(id){const s=getSite(id);if(!s)return;$("editId").value=s.id;$("siteName").value=s.name;$("siteUrl").value=s.url;$("siteGoal").value=s.goal||"";$("siteWallet").value=s.wallet||"";$("siteStatus").value=s.status||"À tester";$("siteReward").value=s.reward||0;$("siteFees").value=s.fees||0;$("sitePaid").value=s.paid||0;$("siteNotes").value=s.notes||"";$("formTitle").textContent="✏️ Modifier le site";$("saveButton").textContent="Enregistrer les modifications";$("cancelEdit").classList.remove("hidden");window.scrollTo({top:0,behavior:"smooth"})}
-$("cancelEdit").addEventListener("click",resetForm);
-function deleteSite(id){const s=getSite(id);if(!s||!confirm("Supprimer le site « "+s.name+" » ? Cette action est irréversible."))return;if(session&&session.siteId===id){alert("Termine d'abord la session de ce site.");return}data.sites=data.sites.filter(x=>x.id!==id);if(selectedId===id)selectedId=null;saveData();render()}
-$("search").addEventListener("input",render);$("filterStatus").addEventListener("change",render);
-$("startSession").addEventListener("click",()=>{if(!selectedId||!getSite(selectedId)){alert("Sélectionne d'abord un site.");return}session={siteId:selectedId,elapsed:0,startedAt:Date.now(),running:true};saveData();startTicker();render()});
-$("pauseSession").addEventListener("click",()=>{if(!session||!session.running)return;session.elapsed=sessionSeconds();session.running=false;saveData();stopTicker();render()});
-$("resumeSession").addEventListener("click",()=>{if(!session||session.running)return;session.startedAt=Date.now();session.running=true;saveData();startTicker();render()});
-$("finishSession").addEventListener("click",()=>{if(!session)return;const seconds=sessionSeconds(),s=getSite(session.siteId);if(s)s.totalSeconds=Number(s.totalSeconds||0)+seconds;session=null;saveData();stopTicker();render()});
-function startTicker(){stopTicker();timerInterval=setInterval(render,1000)}function stopTicker(){if(timerInterval)clearInterval(timerInterval);timerInterval=null}
-$("openExternal").addEventListener("click",()=>{const s=getSite(selectedId);if(!s||!safeUrl(s.url)){alert("Sélectionne un site avec une URL valide.");return}window.open(s.url,"_blank","noopener,noreferrer")});
-function downloadFile(filename,content,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$("exportJson").addEventListener("click",()=>downloadFile("panel20-sauvegarde.json",JSON.stringify({...data,session},null,2),"application/json"));
-$("importButton").addEventListener("click",()=>$("importFile").click());
-$("importFile").addEventListener("change",async e=>{const file=e.target.files[0];if(!file)return;try{const p=JSON.parse(await file.text());if(!p||!Array.isArray(p.sites))throw Error("Format invalide");if(!confirm("Importer cette sauvegarde et remplacer les données actuelles ?"))return;data={sites:p.sites,session:p.session||null};session=data.session;selectedId=null;if(session&&session.running){session.running=false;session.elapsed=Number(session.elapsed||0)}saveData();stopTicker();render();alert("Sauvegarde importée.")}catch{alert("Impossible d'importer ce fichier JSON.")}finally{e.target.value=""}});
-$("exportCsv").addEventListener("click",()=>{const cols=["name","url","status","goal","wallet","totalSeconds","reward","fees","paid","notes"],q=v=>'"'+String(v??"").replace(/"/g,'""')+'"',csv=[cols.join(";"),...data.sites.map(s=>cols.map(k=>q(s[k])).join(";"))].join("\r\n");downloadFile("panel20-sites.csv","\uFEFF"+csv,"text/csv;charset=utf-8")});
-$("clearData").addEventListener("click",()=>{if(!confirm("Effacer TOUS les sites et toutes les données locales ? Fais une sauvegarde avant de continuer."))return;stopTicker();data={sites:[],session:null};session=null;selectedId=null;localStorage.removeItem(STORAGE_KEY);$("viewer").src="about:blank";resetForm();render()});
-if(session&&session.running){session.running=false;session.elapsed=Number(session.elapsed||0);saveData()}
-render();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./app.js"></script>
 </body>
 </html>
