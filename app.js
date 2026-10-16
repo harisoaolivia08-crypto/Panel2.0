@@ -95,7 +95,7 @@ $("importFile").addEventListener("change",async e=>{const file=e.target.files[0]
 function parseCsv(text,delimiter=";"){
  const rows=[];let row=[],field="",quoted=false;
  for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}
- else if(c==='"')quoted=true;else if(c===delimiter){row.push(field);field=""}else if(c==="\\n"){row.push(field.replace(/\\r$/,""));rows.push(row);row=[];field=""}else field+=c}
+ else if(c==='"')quoted=true;else if(c===delimiter){row.push(field);field=""}else if(c==="\n"){row.push(field.replace(/\\r$/,""));rows.push(row);row=[];field=""}else field+=c}
  if(field.length||row.length){row.push(field.replace(/\\r$/,""));rows.push(row)}
  return rows.filter(r=>r.some(v=>String(v).trim()!==""));
 }
@@ -103,9 +103,9 @@ $("importCsv").addEventListener("click",()=>{if(!currentUser){alert("Connecte-to
 $("importCsvFile").addEventListener("change",async e=>{
  const file=e.target.files&&e.target.files[0];if(!file)return;
  try{
-  const text=await file.text();let rows=parseCsv(text.replace(/^\\uFEFF/,""));
+  const text=await file.text();let rows=parseCsv(text.replace(/^\uFEFF/,""));
   if(!rows.length)throw new Error("Le fichier est vide.");
-  if(!rows[0].some(v=>String(v).trim().toLowerCase()==="url")){rows=parseCsv(text.replace(/^\\uFEFF/,""),",")}
+  if(!rows[0].some(v=>String(v).trim().toLowerCase()==="url")){rows=parseCsv(text.replace(/^\uFEFF/,""),",")}
   const headers=rows.shift().map(v=>String(v).trim().toLowerCase());
   const ix=Object.fromEntries(headers.map((h,i)=>[h,i]));
   if(ix.name===undefined||ix.url===undefined)throw new Error("Colonnes « name » et « url » introuvables. Utilise le fichier Exporter CSV de HaryFi.");
