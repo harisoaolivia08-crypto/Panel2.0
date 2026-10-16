@@ -1,6 +1,6 @@
 # Panel 2.0 — Supabase backend
 
-This repository includes the first database/backend foundation for a multi-user site and reward tracker.
+This repository contains the Supabase database schema and browser integration for a multi-user site and reward tracker. The connected project has the schema deployed; runtime signup/login still needs an end-to-end browser test with a real email account.
 
 ## Architecture
 - Supabase Auth provides separate user accounts.
@@ -11,17 +11,16 @@ This repository includes the first database/backend foundation for a multi-user 
 
 ## Files
 - supabase/migrations/20261017000000_initial_schema.sql — schema, constraints, indexes, RLS, session RPCs.
-- supabase/tests/database.test.sql — pgTAP structural smoke tests.
+- supabase/tests/database.test.sql — pgTAP schema, RLS, and RPC-permission checks.
+- app.js — Supabase Auth and database integration for the browser interface.
 - .env.example — blank configuration template.
 
 ## Setup
-1. Create a project at https://supabase.com/dashboard.
-2. Install the Supabase CLI and Docker; run: supabase login
-3. Link this repository: supabase link --project-ref YOUR_PROJECT_REF
-4. Review and apply the migration: supabase db push
-5. Configure allowed redirect URLs and sign-in methods in Supabase Authentication settings.
-6. Run local tests: supabase start, then supabase test db.
-7. Add the project URL and publishable/anon key to frontend runtime configuration. Never put a service-role key in public code.
+1. The connected Supabase project is configured in `app.js` using its project URL and publishable key. The publishable key is intended for browser use; database access is restricted by RLS.
+2. For a fresh environment, install the Supabase CLI and Docker, run `supabase login`, then `supabase link --project-ref YOUR_PROJECT_REF` and `supabase db push`.
+3. In Supabase Authentication settings, set the Site URL to the actual deployed Panel 2.0 URL and add that URL to the allowed redirect URLs. Enable email/password sign-in.
+4. Run database tests in a local Supabase environment with `supabase start` and `supabase test db`.
+5. Never put a service-role key or database password in browser code or commit them to GitHub.
 
 ## Data model
 - profiles: display name for each auth user.
