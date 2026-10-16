@@ -92,6 +92,40 @@ function downloadFile(filename,content,type){const blob=new Blob([content],{type
 $("exportJson").addEventListener("click",()=>downloadFile("panel20-sauvegarde.json",JSON.stringify({sites:data.sites,sessions:data.sessions,transactions:data.transactions},null,2),"application/json"));
 $("importButton").addEventListener("click",()=>$("importFile").click());
 $("importFile").addEventListener("change",async e=>{const file=e.target.files[0];if(!file)return;try{const p=JSON.parse(await file.text());if(!p||!Array.isArray(p.sites))throw Error("Format invalide");if(!confirm("Importer cette sauvegarde et ajouter ses sites à ton compte ?"))return;for(const s of p.sites){const site=unwrap(await checked(client.from("sites").insert({name:String(s.name||"Site importé").slice(0,160),url:safeUrl(s.url)||"https://example.com",goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||"").slice(0,160),status:STATUS_TO_DB[s.status]||"to_test",notes:String(s.notes||"").slice(0,10000)}).select().single()));await Promise.all([syncTotal(site.id,"reward",Math.max(0,Number(s.reward)||0)),syncTotal(site.id,"fee",Math.max(0,Number(s.fees)||0)),syncTotal(site.id,"payout",Math.max(0,Number(s.paid)||0))])}await loadAll();alert("Sauvegarde importée dans ton compte.")}catch(err){alert("Import impossible : "+(err.message||"fichier invalide"))}finally{e.target.value=""}});
+function parseCsv(text,delimiter=";"){
+ const rows=[];let row=[],field="",quoted=false;
+ for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}
+ else if(c==='"')quoted=true;else if(c===delimiter){row.push(field);field=""}else if(c==="\\n"){row.push(field.replace(/\\r$/,""));rows.push(row);row=[];field=""}else field+=c}
+ if(field.length||row.length){row.push(field.replace(/\\r$/,""));rows.push(row)}
+ return rows.filter(r=>r.some(v=>String(v).trim()!==""));
+}
+$("importCsv").addEventListener("click",()=>{if(!currentUser){alert("Connecte-toi d’abord à ton compte HaryFi.");return}$("importCsvFile").click()});
+$("importCsvFile").addEventListener("change",async e=>{
+ const file=e.target.files&&e.target.files[0];if(!file)return;
+ try{
+  const text=await file.text();let rows=parseCsv(text.replace(/^\\uFEFF/,""));
+  if(!rows.length)throw new Error("Le fichier est vide.");
+  if(!rows[0].some(v=>String(v).trim().toLowerCase()==="url")){rows=parseCsv(text.replace(/^\\uFEFF/,""),",")}
+  const headers=rows.shift().map(v=>String(v).trim().toLowerCase());
+  const ix=Object.fromEntries(headers.map((h,i)=>[h,i]));
+  if(ix.name===undefined||ix.url===undefined)throw new Error("Colonnes « name » et « url » introuvables. Utilise le fichier Exporter CSV de HaryFi.");
+  const entries=rows.map(r=>({name:String(r[ix.name]||"").trim(),url:safeUrl(String(r[ix.url]||"").trim()),status:String(r[ix.status]||"À tester").trim(),goal:String(r[ix.goal]||""),wallet:String(r[ix.wallet]||""),notes:String(r[ix.notes]||""),reward:Number(r[ix.reward]||0)||0,fees:Number(r[ix.fees]||0)||0,paid:Number(r[ix.paid]||0)||0})).filter(s=>s.name&&s.url);
+  if(!entries.length)throw new Error("Aucun site valide trouvé dans ce fichier.");
+  const existingUrls=new Set(data.sites.map(s=>s.url));
+  const fresh=entries.filter(s=>!existingUrls.has(s.url));
+  if(!fresh.length){alert("Ces sites sont déjà présents dans ce compte. Aucun doublon ajouté.");return}
+  if(!confirm("Importer "+fresh.length+" site(s) dans ton compte HaryFi ? Les sites déjà présents seront ignorés."))return;
+  let imported=0,failed=0;
+  for(const s of fresh){try{
+   const status=STATUS_TO_DB[s.status]||(["to_test","testing","reliable","review","abandoned"].includes(s.status)?s.status:"to_test");
+   const saved=unwrap(await checked(client.from("sites").insert({name:s.name.slice(0,160),url:s.url,goal:s.goal.slice(0,2000),wallet_label:s.wallet.slice(0,160),status,notes:s.notes.slice(0,10000)}).select().single()));
+   await Promise.all([syncTotal(saved.id,"reward",s.reward),syncTotal(saved.id,"fee",s.fees),syncTotal(saved.id,"payout",s.paid)]);
+   imported++;
+  }catch(err){failed++;console.error("Import CSV failed",err)}}
+  await loadAll();alert(imported+" site(s) importé(s)."+(failed?" "+failed+" échec(s), vérifie les autorisations du compte.":""));
+ }catch(err){alert("Importation impossible : "+(err.message||"fichier CSV invalide."))}
+ finally{e.target.value=""}
+});
 $("exportCsv").addEventListener("click",()=>{const cols=["name","url","status","goal","wallet","totalSeconds","reward","fees","paid","notes"],q=v=>'"'+String(v??"").replace(/"/g,'""')+'"',csv=[cols.join(";"),...data.sites.map(s=>cols.map(k=>q(k==="status"?s[k]:s[k])).join(";"))].join("\r\n");downloadFile("panel20-sites.csv","\uFEFF"+csv,"text/csv;charset=utf-8")});
 $("clearData").addEventListener("click",async()=>{if(!confirm("Supprimer TOUS tes sites, sessions et transactions dans le compte connecté ? Cette action est irréversible."))return;try{await checked(client.from("sites").delete().not("id","is",null));selectedId=null;session=null;$("viewer").src="about:blank";resetForm();await loadAll()}catch(e){alert("Suppression impossible : "+e.message)}});
 $("signUp").addEventListener("click",async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value,name=$("displayName").value.trim();if(!email||password.length<8){showMessage("Entre un e-mail et un mot de passe d’au moins 8 caractères.",true);return}setBusy(true);try{const {data:result,error}=await client.auth.signUp({email,password,options:{data:{display_name:name},emailRedirectTo:window.location.origin+window.location.pathname}});if(error)throw error;if(result.session){showMessage("Compte créé. Tu es connecté.");await enterApp(result.session.user)}else showMessage("Inscription reçue. Vérifie tes e-mails pour confirmer ton compte, puis connecte-toi.")}catch(e){showMessage("Inscription impossible : "+e.message,true)}finally{setBusy(false)}});
