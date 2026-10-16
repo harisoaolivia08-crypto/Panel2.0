@@ -67,7 +67,7 @@ function render(){
 function selectSite(id){selectedId=id;const s=getSite(id);if(s&&safeUrl(s.url))$("viewer").src=safeUrl(s.url);render()}
 function resetForm(){$("siteForm").reset();$("editId").value="";$("siteReward").value=0;$("siteFees").value=0;$("sitePaid").value=0;$("formTitle").textContent="＋ Ajouter un site";$("saveButton").textContent="Enregistrer le site";$("cancelEdit").classList.add("hidden")}
 $("siteForm").addEventListener("submit",async e=>{
- e.preventDefault();try{
+ e.preventDefault();if(!currentUser){alert("Connecte-toi ou crée un compte pour enregistrer un site dans Supabase.");return}try{
   const name=$("siteName").value.trim(),url=safeUrl($("siteUrl").value.trim());if(!name||!url){alert("Saisis un nom et une URL valide commençant par http:// ou https://.");return}
   const id=$("editId").value,old=id?getSite(id):null;
   const payload={name,url,goal:$("siteGoal").value.trim(),wallet_label:$("siteWallet").value.trim(),status:STATUS_TO_DB[$("siteStatus").value]||"to_test",notes:$("siteNotes").value.trim()};
