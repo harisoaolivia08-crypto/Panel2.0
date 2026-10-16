@@ -100,27 +100,44 @@ $("signOut").addEventListener("click",async()=>{try{const {error}=await client.a
 async function migrateLegacyLocalSites(){
  const existing=await checked(client.from("sites").select("id").limit(1));
  if(existing.length)return;
- let legacy;
- try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;legacy=JSON.parse(raw)}catch{return}
- const oldSites=Array.isArray(legacy)?legacy:legacy&&Array.isArray(legacy.sites)?legacy.sites:null;
- if(!oldSites||!oldSites.length)return;
- if(!confirm("J’ai trouvé "+oldSites.length+" ancien(s) site(s) dans le stockage de ce navigateur. Veux-tu les importer dans ton compte Supabase ? Les anciennes données du navigateur ne seront pas supprimées."))return;
- let imported=0;
+ const candidates=[];
+ try{
+  for(let i=0;i<localStorage.length;i++){
+   const key=localStorage.key(i);if(!key)continue;
+   let parsed;try{parsed=JSON.parse(localStorage.getItem(key))}catch{continue}
+   const arrays=[];
+   if(Array.isArray(parsed))arrays.push(parsed);
+   if(parsed&&typeof parsed==="object"){
+    for(const value of Object.values(parsed))if(Array.isArray(value))arrays.push(value);
+   }
+   for(const arr of arrays){
+    const siteLike=arr.filter(s=>s&&typeof s==="object"&&(s.name||s.siteName)&&(s.url||s.siteUrl));
+    if(siteLike.length)candidates.push({key,sites:siteLike});
+   }
+  }
+ }catch(e){console.warn("Lecture des anciennes données impossible",e)}
+ if(!candidates.length)return;
+ candidates.sort((a,b)=>b.sites.length-a.sites.length);
+ const chosen=candidates[0],oldSites=chosen.sites;
+ if(!confirm("J’ai trouvé "+oldSites.length+" ancien(s) site(s) dans le stockage de ce navigateur (« "+chosen.key+" »). Veux-tu les importer dans ton compte HaryFi ? Les anciennes données ne seront pas supprimées."))return;
+ let imported=0,failed=0;
  for(const s of oldSites){
-  const name=String(s.name||s.siteName||"").trim().slice(0,160),url=safeUrl(s.url||s.siteUrl);
-  if(!name||!url)continue;
-  const rawStatus=s.status||s.statut||"À tester";
-  const status=STATUS_TO_DB[rawStatus]||(["to_test","testing","reliable","review","abandoned"].includes(rawStatus)?rawStatus:"to_test");
-  const saved=unwrap(await checked(client.from("sites").insert({name,url,goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||s.wallet_label||"").slice(0,160),status,notes:String(s.notes||"").slice(0,10000)}).select().single()));
-  await Promise.all([
-   syncTotal(saved.id,"reward",Math.max(0,Number(s.reward)||0)),
-   syncTotal(saved.id,"fee",Math.max(0,Number(s.fees)||0)),
-   syncTotal(saved.id,"payout",Math.max(0,Number(s.paid)||0))
-  ]);
-  imported++;
+  try{
+   const name=String(s.name||s.siteName||"").trim().slice(0,160),url=safeUrl(s.url||s.siteUrl);
+   if(!name||!url)continue;
+   const rawStatus=s.status||s.statut||"À tester";
+   const status=STATUS_TO_DB[rawStatus]||(["to_test","testing","reliable","review","abandoned"].includes(rawStatus)?rawStatus:"to_test");
+   const saved=unwrap(await checked(client.from("sites").insert({name,url,goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||s.wallet_label||"").slice(0,160),status,notes:String(s.notes||"").slice(0,10000)}).select().single()));
+   await Promise.all([
+    syncTotal(saved.id,"reward",Math.max(0,Number(s.reward)||0)),
+    syncTotal(saved.id,"fee",Math.max(0,Number(s.fees)||0)),
+    syncTotal(saved.id,"payout",Math.max(0,Number(s.paid)||0))
+   ]);
+   imported++;
+  }catch(err){failed++;console.error("Échec import d’un site",err)}
  }
- if(imported)alert(imported+" site(s) importé(s) dans ton compte Supabase.");
- else alert("Aucun site valide n’a été trouvé dans l’ancienne sauvegarde du navigateur.");
+ if(imported)alert(imported+" site(s) importé(s) dans ton compte HaryFi."+ (failed?" "+failed+" site(s) n’ont pas pu être importés.":""));
+ else alert("Les anciennes données ont été détectées, mais aucun site n’a pu être importé. Vérifie la connexion et les droits du compte.");
 }
 async function enterApp(user){if(currentUser&&currentUser.id===user.id)return;if(enteringUserId===user.id)return;enteringUserId=user.id;currentUser=user;$("authPanel").classList.add("hidden");$("appContent").classList.remove("hidden");$("userLabel").textContent=user.email||"Compte connecté";showMessage("");try{await migrateLegacyLocalSites();await loadAll()}catch(e){alert("Impossible de charger ou récupérer tes données : "+e.message)}finally{enteringUserId=null}}
 function leaveApp(){currentUser=null;data={sites:[],sessions:[],transactions:[]};session=null;selectedId=null;stopTicker();$("appContent").classList.add("hidden");$("authPanel").classList.remove("hidden");$("userLabel").textContent="Non connecté";render()}
