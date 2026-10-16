@@ -12,6 +12,7 @@ This repository contains the Supabase database schema and browser integration fo
 ## Files
 - supabase/migrations/20261017000000_initial_schema.sql — schema, constraints, indexes, RLS, session RPCs.
 - supabase/tests/database.test.sql — pgTAP schema, RLS, and RPC-permission checks.
+- supabase/tests/rls_isolation.test.sql — multi-user isolation tests for sites, sessions, and rewards.
 - app.js — Supabase Auth and database integration for the browser interface.
 - .env.example — blank configuration template.
 
