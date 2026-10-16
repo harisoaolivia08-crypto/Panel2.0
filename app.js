@@ -97,7 +97,32 @@ $("clearData").addEventListener("click",async()=>{if(!confirm("Supprimer TOUS te
 $("signUp").addEventListener("click",async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value,name=$("displayName").value.trim();if(!email||password.length<8){showMessage("Entre un e-mail et un mot de passe d’au moins 8 caractères.",true);return}setBusy(true);try{const {data:result,error}=await client.auth.signUp({email,password,options:{data:{display_name:name},emailRedirectTo:window.location.origin+window.location.pathname}});if(error)throw error;if(result.session){showMessage("Compte créé. Tu es connecté.");await enterApp(result.session.user)}else showMessage("Inscription reçue. Vérifie tes e-mails pour confirmer ton compte, puis connecte-toi.")}catch(e){showMessage("Inscription impossible : "+e.message,true)}finally{setBusy(false)}});
 $("signIn").addEventListener("click",async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value;if(!email||!password){showMessage("Entre ton e-mail et ton mot de passe.",true);return}setBusy(true);try{const {data:result,error}=await client.auth.signInWithPassword({email,password});if(error)throw error;showMessage("Connexion réussie.");await enterApp(result.user)}catch(e){showMessage("Connexion impossible : "+e.message,true)}finally{setBusy(false)}});
 $("signOut").addEventListener("click",async()=>{try{const {error}=await client.auth.signOut();if(error)throw error;leaveApp()}catch(e){alert("Déconnexion impossible : "+e.message)}});
-async function enterApp(user){if(currentUser&&currentUser.id===user.id)return;if(enteringUserId===user.id)return;enteringUserId=user.id;currentUser=user;$("authPanel").classList.add("hidden");$("appContent").classList.remove("hidden");$("userLabel").textContent=user.email||"Compte connecté";showMessage("");try{await loadAll()}catch(e){alert("Impossible de charger tes données : "+e.message)}finally{enteringUserId=null}}
+async function migrateLegacyLocalSites(){
+ const existing=await checked(client.from("sites").select("id").limit(1));
+ if(existing.length)return;
+ let legacy;
+ try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;legacy=JSON.parse(raw)}catch{return}
+ const oldSites=Array.isArray(legacy)?legacy:legacy&&Array.isArray(legacy.sites)?legacy.sites:null;
+ if(!oldSites||!oldSites.length)return;
+ if(!confirm("J’ai trouvé "+oldSites.length+" ancien(s) site(s) dans le stockage de ce navigateur. Veux-tu les importer dans ton compte Supabase ? Les anciennes données du navigateur ne seront pas supprimées."))return;
+ let imported=0;
+ for(const s of oldSites){
+  const name=String(s.name||s.siteName||"").trim().slice(0,160),url=safeUrl(s.url||s.siteUrl);
+  if(!name||!url)continue;
+  const rawStatus=s.status||s.statut||"À tester";
+  const status=STATUS_TO_DB[rawStatus]||(["to_test","testing","reliable","review","abandoned"].includes(rawStatus)?rawStatus:"to_test");
+  const saved=unwrap(await checked(client.from("sites").insert({name,url,goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||s.wallet_label||"").slice(0,160),status,notes:String(s.notes||"").slice(0,10000)}).select().single()));
+  await Promise.all([
+   syncTotal(saved.id,"reward",Math.max(0,Number(s.reward)||0)),
+   syncTotal(saved.id,"fee",Math.max(0,Number(s.fees)||0)),
+   syncTotal(saved.id,"payout",Math.max(0,Number(s.paid)||0))
+  ]);
+  imported++;
+ }
+ if(imported)alert(imported+" site(s) importé(s) dans ton compte Supabase.");
+ else alert("Aucun site valide n’a été trouvé dans l’ancienne sauvegarde du navigateur.");
+}
+async function enterApp(user){if(currentUser&&currentUser.id===user.id)return;if(enteringUserId===user.id)return;enteringUserId=user.id;currentUser=user;$("authPanel").classList.add("hidden");$("appContent").classList.remove("hidden");$("userLabel").textContent=user.email||"Compte connecté";showMessage("");try{await migrateLegacyLocalSites();await loadAll()}catch(e){alert("Impossible de charger ou récupérer tes données : "+e.message)}finally{enteringUserId=null}}
 function leaveApp(){currentUser=null;data={sites:[],sessions:[],transactions:[]};session=null;selectedId=null;stopTicker();$("appContent").classList.add("hidden");$("authPanel").classList.remove("hidden");$("userLabel").textContent="Non connecté";render()}
 client.auth.onAuthStateChange((event,authSession)=>{if(authSession&&authSession.user){if((!currentUser||currentUser.id!==authSession.user.id)&&enteringUserId!==authSession.user.id)setTimeout(()=>enterApp(authSession.user),0)}else if(currentUser)leaveApp()});
 (async()=>{const {data:{session:authSession},error}=await client.auth.getSession();if(error){showMessage("Erreur d’authentification : "+error.message,true);return}if(authSession)await enterApp(authSession.user);else{leaveApp();showMessage("Connecte-toi ou crée un compte pour commencer.")}})();
