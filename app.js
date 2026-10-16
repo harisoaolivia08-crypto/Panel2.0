@@ -1,179 +1,40 @@
 "use strict";
-const SUPABASE_URL = "https://leccpiyvcknpgqmqcaqc.supabase.co";
-const SUPABASE_KEY = "sb_publishable_BzpNUjEqfINYfTF6CPDwuQ_2pL50FUN";
-const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-});
-const $ = id => document.getElementById(id);
-const STATUS_TO_DB = {"À tester":"to_test","En test":"testing","Fiable":"reliable","À vérifier":"review","Abandonné":"abandoned"};
-const STATUS_FROM_DB = Object.fromEntries(Object.entries(STATUS_TO_DB).map(([k,v])=>[v,k]));
-const STORAGE_KEY = "panel20Data";
-let data = {sites:[], sessions:[], transactions:[]}, selectedId=null, session=null, timerInterval=null, currentUser=null, enteringUserId=null;
-function safeUrl(v){try{const u=new URL(v);return ["http:","https:"].includes(u.protocol)?u.href:""}catch{return ""}}
-function formatTime(n){n=Math.max(0,Math.floor(Number(n)||0));return [String(Math.floor(n/3600)).padStart(2,"0"),String(Math.floor(n%3600/60)).padStart(2,"0"),String(n%60).padStart(2,"0")].join(":")}
-function fmtAmount(n){return Number(n||0).toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:8})}
-function getSite(id){return data.sites.find(s=>s.id===id)}
-function elapsedFor(s){return Number(s.totalSeconds||0)}
-function sessionSeconds(){if(!session)return 0;return Number(session.elapsed||0)+(session.running?Math.max(0,Math.floor((Date.now()-session.startedAt)/1000)):0)}
-function total(k){return data.sites.reduce((a,s)=>a+Number(s[k]||0),0)}
-function showMessage(msg,error=false){$("authMessage").textContent=msg;$("authMessage").style.color=error?"#ff9aaa":"#8af0c5"}
-function setBusy(b){["signUp","signIn","signOut"].forEach(id=>{if($(id))$(id).disabled=b})}
-function unwrap(row){return Array.isArray(row)?row[0]:row}
-async function checked(promise){const {data,error}=await promise;if(error)throw error;return data}
-async function loadAll(){
- const [sites,sessions,transactions]=await Promise.all([
-  checked(client.from("sites").select("*").order("updated_at",{ascending:false})),
-  checked(client.from("sessions").select("*").order("started_at",{ascending:false})),
-  checked(client.from("reward_transactions").select("*").order("occurred_at",{ascending:false}))
- ]);
- data.sites=sites.map(s=>({...s,id:s.id,name:s.name,url:s.url,goal:s.goal||"",wallet:s.wallet_label||"",status:STATUS_FROM_DB[s.status]||"À tester",notes:s.notes||"",createdAt:s.created_at,updatedAt:s.updated_at,reward:0,fees:0,paid:0,totalSeconds:0}));
- data.sessions=sessions;data.transactions=transactions;
- transactions.forEach(t=>{const s=getSite(t.site_id);if(!s)return;if(t.kind==="reward")s.reward+=Number(t.amount);if(t.kind==="fee")s.fees+=Number(t.amount);if(t.kind==="payout")s.paid+=Number(t.amount)});
- sessions.filter(s=>s.status==="completed").forEach(x=>{const s=getSite(x.site_id);if(s)s.totalSeconds+=Number(x.elapsed_seconds||0)});
- const open=sessions.find(s=>["active","paused"].includes(s.status));
- session=open?{id:open.id,siteId:open.site_id,status:open.status,elapsed:Number(open.elapsed_seconds||0),startedAt:open.last_resumed_at?new Date(open.last_resumed_at).getTime():Date.now(),running:open.status==="active"}:null;
- if(session)selectedId=session.siteId;
- render();if(session&&session.running)startTicker();else stopTicker();
-}
-async function syncTotal(siteId,kind,amount){
- const existing=await checked(client.from("reward_transactions").select("id").eq("site_id",siteId).eq("kind",kind).eq("notes","panel2_total").limit(1));
- if(Number(amount)<=0){if(existing.length)await checked(client.from("reward_transactions").delete().eq("id",existing[0].id));return}
- const payload={site_id:siteId,kind,amount:Number(amount),currency:"USD",status:"confirmed",notes:"panel2_total",reference:"Panel 2.0 total"};
- if(existing.length)await checked(client.from("reward_transactions").update(payload).eq("id",existing[0].id));
- else await checked(client.from("reward_transactions").insert(payload));
-}
-function makeButton(label,cls,fn){const b=document.createElement("button");b.type="button";b.className=cls;b.textContent=label;b.addEventListener("click",fn);return b}
-function render(){
- $("statSites").textContent=data.sites.length;
- $("statTime").textContent=formatTime(data.sites.reduce((a,s)=>a+elapsedFor(s),0)+(session?sessionSeconds():0));
- $("statRewards").textContent=fmtAmount(total("reward"));$("statPaid").textContent=fmtAmount(total("paid"));
- const q=$("search").value.trim().toLowerCase(),st=$("filterStatus").value;
- const sites=data.sites.filter(s=>(!q||[s.name,s.url,s.goal,s.wallet,s.notes].join(" ").toLowerCase().includes(q))&&(!st||s.status===st));
- const tbody=$("siteRows");tbody.replaceChildren();
- if(!sites.length){const tr=document.createElement("tr"),td=document.createElement("td");td.colSpan=5;td.textContent="Aucun site trouvé. Ajoute ton premier site ci-dessus.";td.className="muted";tr.appendChild(td);tbody.appendChild(tr)}
- sites.forEach(s=>{
-  const tr=document.createElement("tr"),name=document.createElement("td"),strong=document.createElement("strong");strong.textContent=s.name;name.appendChild(strong);name.appendChild(document.createElement("br"));
-  const link=document.createElement("a");link.href=safeUrl(s.url)||"#";link.target="_blank";link.rel="noopener noreferrer";link.textContent=s.url;link.addEventListener("click",e=>{if(!safeUrl(s.url))e.preventDefault()});name.appendChild(link);
-  if(s.goal){const p=document.createElement("p");p.className="small";p.textContent=s.goal;name.appendChild(p)}
-  const statusTd=document.createElement("td"),badge=document.createElement("span");badge.className="badge "+(s.status==="Fiable"?"active":(["À vérifier","Abandonné"].includes(s.status)?"error":""));badge.textContent=s.status||"À tester";statusTd.appendChild(badge);
-  const timeTd=document.createElement("td");timeTd.textContent=formatTime(elapsedFor(s)+(session&&session.siteId===s.id?sessionSeconds():0));
-  const rewardTd=document.createElement("td");rewardTd.textContent=fmtAmount(s.reward);
-  const actions=document.createElement("td");actions.append(makeButton("Sélectionner","secondary",()=>selectSite(s.id)),makeButton("Modifier","secondary",()=>editSite(s.id)),makeButton("Supprimer","danger",()=>deleteSite(s.id)));
-  tr.append(name,statusTd,timeTd,rewardTd,actions);tbody.appendChild(tr);
- });
- if(session){const s=getSite(session.siteId);$("sessionSite").textContent=s?"Site : "+s.name+(session.running?" — session active":" — en pause"):"Site supprimé";$("timer").textContent=formatTime(sessionSeconds());$("startSession").disabled=true;$("pauseSession").disabled=!session.running;$("resumeSession").disabled=session.running;$("finishSession").disabled=false}
- else{$("sessionSite").textContent=selectedId&&getSite(selectedId)?"Site sélectionné : "+getSite(selectedId).name:"Aucun site sélectionné.";$("timer").textContent="00:00:00";$("startSession").disabled=!selectedId;$("pauseSession").disabled=true;$("resumeSession").disabled=true;$("finishSession").disabled=true}
-}
-function selectSite(id){selectedId=id;const s=getSite(id);if(s&&safeUrl(s.url))$("viewer").src=safeUrl(s.url);render()}
-function resetForm(){$("siteForm").reset();$("editId").value="";$("siteReward").value=0;$("siteFees").value=0;$("sitePaid").value=0;$("formTitle").textContent="＋ Ajouter un site";$("saveButton").textContent="Enregistrer le site";$("cancelEdit").classList.add("hidden")}
-$("siteForm").addEventListener("submit",async e=>{
- e.preventDefault();if(!currentUser){alert("Connecte-toi ou crée un compte pour enregistrer un site dans Supabase.");return}try{
-  const name=$("siteName").value.trim(),url=safeUrl($("siteUrl").value.trim());if(!name||!url){alert("Saisis un nom et une URL valide commençant par http:// ou https://.");return}
-  const id=$("editId").value,old=id?getSite(id):null;
-  const payload={name,url,goal:$("siteGoal").value.trim(),wallet_label:$("siteWallet").value.trim(),status:STATUS_TO_DB[$("siteStatus").value]||"to_test",notes:$("siteNotes").value.trim()};
-  let saved;
-  if(old)saved=unwrap(await checked(client.from("sites").update(payload).eq("id",id).select().single()));
-  else saved=unwrap(await checked(client.from("sites").insert(payload).select().single()));
-  await Promise.all([syncTotal(saved.id,"reward",$("siteReward").value),syncTotal(saved.id,"fee",$("siteFees").value),syncTotal(saved.id,"payout",$("sitePaid").value)]);
-  selectedId=saved.id;resetForm();await loadAll();
- }catch(err){alert("Erreur d'enregistrement : "+(err.message||"vérifie ta connexion."))}
-});
-function editSite(id){const s=getSite(id);if(!s)return;$("editId").value=s.id;$("siteName").value=s.name;$("siteUrl").value=s.url;$("siteGoal").value=s.goal||"";$("siteWallet").value=s.wallet||"";$("siteStatus").value=s.status||"À tester";$("siteReward").value=s.reward||0;$("siteFees").value=s.fees||0;$("sitePaid").value=s.paid||0;$("siteNotes").value=s.notes||"";$("formTitle").textContent="✏️ Modifier le site";$("saveButton").textContent="Enregistrer les modifications";$("cancelEdit").classList.remove("hidden");window.scrollTo({top:0,behavior:"smooth"})}
-$("cancelEdit").addEventListener("click",resetForm);
-async function deleteSite(id){const s=getSite(id);if(!s||!confirm("Supprimer le site « "+s.name+" » ainsi que ses sessions et transactions ? Cette action est irréversible."))return;if(session&&session.siteId===id){alert("Termine d'abord la session de ce site.");return}try{await checked(client.from("sites").delete().eq("id",id));if(selectedId===id)selectedId=null;await loadAll()}catch(e){alert("Suppression impossible : "+e.message)}}
-$("search").addEventListener("input",render);$("filterStatus").addEventListener("change",render);
-$("startSession").addEventListener("click",async()=>{if(!selectedId||!getSite(selectedId)){alert("Sélectionne d'abord un site.");return}try{unwrap(await checked(client.rpc("start_session",{p_site_id:selectedId})));await loadAll()}catch(e){alert("Impossible de démarrer : "+e.message)}});
-$("pauseSession").addEventListener("click",async()=>{if(!session||!session.running)return;try{unwrap(await checked(client.rpc("pause_session",{p_session_id:session.id})));await loadAll()}catch(e){alert("Impossible de mettre en pause : "+e.message)}});
-$("resumeSession").addEventListener("click",async()=>{if(!session||session.running)return;try{unwrap(await checked(client.rpc("resume_session",{p_session_id:session.id})));await loadAll()}catch(e){alert("Impossible de reprendre : "+e.message)}});
-$("finishSession").addEventListener("click",async()=>{if(!session)return;try{unwrap(await checked(client.rpc("finish_session",{p_session_id:session.id})));await loadAll()}catch(e){alert("Impossible de terminer : "+e.message)}});
-function startTicker(){stopTicker();timerInterval=setInterval(render,1000)}function stopTicker(){if(timerInterval)clearInterval(timerInterval);timerInterval=null}
-$("openExternal").addEventListener("click",()=>{const s=getSite(selectedId);if(!s||!safeUrl(s.url)){alert("Sélectionne un site avec une URL valide.");return}window.open(s.url,"_blank","noopener,noreferrer")});
-function downloadFile(filename,content,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$("exportJson").addEventListener("click",()=>downloadFile("panel20-sauvegarde.json",JSON.stringify({sites:data.sites,sessions:data.sessions,transactions:data.transactions},null,2),"application/json"));
-$("importButton").addEventListener("click",()=>$("importFile").click());
-$("importFile").addEventListener("change",async e=>{const file=e.target.files[0];if(!file)return;try{const p=JSON.parse(await file.text());if(!p||!Array.isArray(p.sites))throw Error("Format invalide");if(!confirm("Importer cette sauvegarde et ajouter ses sites à ton compte ?"))return;for(const s of p.sites){const site=unwrap(await checked(client.from("sites").insert({name:String(s.name||"Site importé").slice(0,160),url:safeUrl(s.url)||"https://example.com",goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||"").slice(0,160),status:STATUS_TO_DB[s.status]||"to_test",notes:String(s.notes||"").slice(0,10000)}).select().single()));await Promise.all([syncTotal(site.id,"reward",Math.max(0,Number(s.reward)||0)),syncTotal(site.id,"fee",Math.max(0,Number(s.fees)||0)),syncTotal(site.id,"payout",Math.max(0,Number(s.paid)||0))])}await loadAll();alert("Sauvegarde importée dans ton compte.")}catch(err){alert("Import impossible : "+(err.message||"fichier invalide"))}finally{e.target.value=""}});
-function parseCsv(text,delimiter=";"){
- const rows=[];let row=[],field="",quoted=false;
- for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}
- else if(c==='"')quoted=true;else if(c===delimiter){row.push(field);field=""}else if(c==="\n"){row.push(field.replace(/\\r$/,""));rows.push(row);row=[];field=""}else field+=c}
- if(field.length||row.length){row.push(field.replace(/\\r$/,""));rows.push(row)}
- return rows.filter(r=>r.some(v=>String(v).trim()!==""));
-}
-$("importCsv").addEventListener("click",()=>{if(!currentUser){alert("Connecte-toi d’abord à ton compte HaryFi.");return}$("importCsvFile").click()});
-$("importCsvFile").addEventListener("change",async e=>{
- const file=e.target.files&&e.target.files[0];if(!file)return;
- try{
-  const text=await file.text();let rows=parseCsv(text.replace(/^\uFEFF/,""));
-  if(!rows.length)throw new Error("Le fichier est vide.");
-  if(!rows[0].some(v=>String(v).trim().toLowerCase()==="url")){rows=parseCsv(text.replace(/^\uFEFF/,""),",")}
-  const headers=rows.shift().map(v=>String(v).trim().toLowerCase());
-  const ix=Object.fromEntries(headers.map((h,i)=>[h,i]));
-  if(ix.name===undefined||ix.url===undefined)throw new Error("Colonnes « name » et « url » introuvables. Utilise le fichier Exporter CSV de HaryFi.");
-  const entries=rows.map(r=>({name:String(r[ix.name]||"").trim(),url:safeUrl(String(r[ix.url]||"").trim()),status:String(r[ix.status]||"À tester").trim(),goal:String(r[ix.goal]||""),wallet:String(r[ix.wallet]||""),notes:String(r[ix.notes]||""),reward:Number(r[ix.reward]||0)||0,fees:Number(r[ix.fees]||0)||0,paid:Number(r[ix.paid]||0)||0})).filter(s=>s.name&&s.url);
-  if(!entries.length)throw new Error("Aucun site valide trouvé dans ce fichier.");
-  const existingUrls=new Set(data.sites.map(s=>s.url));
-  const fresh=entries.filter(s=>!existingUrls.has(s.url));
-  if(!fresh.length){alert("Ces sites sont déjà présents dans ce compte. Aucun doublon ajouté.");return}
-  if(!confirm("Importer "+fresh.length+" site(s) dans ton compte HaryFi ? Les sites déjà présents seront ignorés."))return;
-  let imported=0,failed=0;
-  for(const s of fresh){try{
-   const status=STATUS_TO_DB[s.status]||(["to_test","testing","reliable","review","abandoned"].includes(s.status)?s.status:"to_test");
-   const saved=unwrap(await checked(client.from("sites").insert({name:s.name.slice(0,160),url:s.url,goal:s.goal.slice(0,2000),wallet_label:s.wallet.slice(0,160),status,notes:s.notes.slice(0,10000)}).select().single()));
-   await Promise.all([syncTotal(saved.id,"reward",s.reward),syncTotal(saved.id,"fee",s.fees),syncTotal(saved.id,"payout",s.paid)]);
-   imported++;
-  }catch(err){failed++;console.error("Import CSV failed",err)}}
-  await loadAll();alert(imported+" site(s) importé(s)."+(failed?" "+failed+" échec(s), vérifie les autorisations du compte.":""));
- }catch(err){alert("Importation impossible : "+(err.message||"fichier CSV invalide."))}
- finally{e.target.value=""}
-});
-$("exportCsv").addEventListener("click",()=>{const cols=["name","url","status","goal","wallet","totalSeconds","reward","fees","paid","notes"],q=v=>'"'+String(v??"").replace(/"/g,'""')+'"',csv=[cols.join(";"),...data.sites.map(s=>cols.map(k=>q(k==="status"?s[k]:s[k])).join(";"))].join("\r\n");downloadFile("panel20-sites.csv","\uFEFF"+csv,"text/csv;charset=utf-8")});
-$("clearData").addEventListener("click",async()=>{if(!confirm("Supprimer TOUS tes sites, sessions et transactions dans le compte connecté ? Cette action est irréversible."))return;try{await checked(client.from("sites").delete().not("id","is",null));selectedId=null;session=null;$("viewer").src="about:blank";resetForm();await loadAll()}catch(e){alert("Suppression impossible : "+e.message)}});
-$("signUp").addEventListener("click",async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value,name=$("displayName").value.trim();if(!email||password.length<8){showMessage("Entre un e-mail et un mot de passe d’au moins 8 caractères.",true);return}setBusy(true);try{const {data:result,error}=await client.auth.signUp({email,password,options:{data:{display_name:name},emailRedirectTo:window.location.origin+window.location.pathname}});if(error)throw error;if(result.session){showMessage("Compte créé. Tu es connecté.");await enterApp(result.session.user)}else showMessage("Inscription reçue. Vérifie tes e-mails pour confirmer ton compte, puis connecte-toi.")}catch(e){showMessage("Inscription impossible : "+e.message,true)}finally{setBusy(false)}});
-$("signIn").addEventListener("click",async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value;if(!email||!password){showMessage("Entre ton e-mail et ton mot de passe.",true);return}setBusy(true);try{const {data:result,error}=await client.auth.signInWithPassword({email,password});if(error)throw error;showMessage("Connexion réussie.");await enterApp(result.user)}catch(e){showMessage("Connexion impossible : "+e.message,true)}finally{setBusy(false)}});
-$("signOut").addEventListener("click",async()=>{try{const {error}=await client.auth.signOut();if(error)throw error;leaveApp()}catch(e){alert("Déconnexion impossible : "+e.message)}});
-async function migrateLegacyLocalSites(){
- const existing=await checked(client.from("sites").select("id").limit(1));
- if(existing.length)return;
- const candidates=[];
- try{
-  for(let i=0;i<localStorage.length;i++){
-   const key=localStorage.key(i);if(!key)continue;
-   let parsed;try{parsed=JSON.parse(localStorage.getItem(key))}catch{continue}
-   const arrays=[];
-   if(Array.isArray(parsed))arrays.push(parsed);
-   if(parsed&&typeof parsed==="object"){
-    for(const value of Object.values(parsed))if(Array.isArray(value))arrays.push(value);
-   }
-   for(const arr of arrays){
-    const siteLike=arr.filter(s=>s&&typeof s==="object"&&(s.name||s.siteName)&&(s.url||s.siteUrl));
-    if(siteLike.length)candidates.push({key,sites:siteLike});
-   }
-  }
- }catch(e){console.warn("Lecture des anciennes données impossible",e)}
- if(!candidates.length)return;
- candidates.sort((a,b)=>b.sites.length-a.sites.length);
- const chosen=candidates[0],oldSites=chosen.sites;
- if(!confirm("J’ai trouvé "+oldSites.length+" ancien(s) site(s) dans le stockage de ce navigateur (« "+chosen.key+" »). Veux-tu les importer dans ton compte HaryFi ? Les anciennes données ne seront pas supprimées."))return;
- let imported=0,failed=0;
- for(const s of oldSites){
-  try{
-   const name=String(s.name||s.siteName||"").trim().slice(0,160),url=safeUrl(s.url||s.siteUrl);
-   if(!name||!url)continue;
-   const rawStatus=s.status||s.statut||"À tester";
-   const status=STATUS_TO_DB[rawStatus]||(["to_test","testing","reliable","review","abandoned"].includes(rawStatus)?rawStatus:"to_test");
-   const saved=unwrap(await checked(client.from("sites").insert({name,url,goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||s.wallet_label||"").slice(0,160),status,notes:String(s.notes||"").slice(0,10000)}).select().single()));
-   await Promise.all([
-    syncTotal(saved.id,"reward",Math.max(0,Number(s.reward)||0)),
-    syncTotal(saved.id,"fee",Math.max(0,Number(s.fees)||0)),
-    syncTotal(saved.id,"payout",Math.max(0,Number(s.paid)||0))
-   ]);
-   imported++;
-  }catch(err){failed++;console.error("Échec import d’un site",err)}
- }
- if(imported)alert(imported+" site(s) importé(s) dans ton compte HaryFi."+ (failed?" "+failed+" site(s) n’ont pas pu être importés.":""));
- else alert("Les anciennes données ont été détectées, mais aucun site n’a pu être importé. Vérifie la connexion et les droits du compte.");
-}
-async function enterApp(user){if(currentUser&&currentUser.id===user.id)return;if(enteringUserId===user.id)return;enteringUserId=user.id;currentUser=user;$("authPanel").classList.add("hidden");$("appContent").classList.remove("hidden");$("userLabel").textContent=user.email||"Compte connecté";showMessage("");try{await migrateLegacyLocalSites();await loadAll()}catch(e){alert("Impossible de charger ou récupérer tes données : "+e.message)}finally{enteringUserId=null}}
-function leaveApp(){currentUser=null;data={sites:[],sessions:[],transactions:[]};session=null;selectedId=null;stopTicker();$("appContent").classList.add("hidden");$("authPanel").classList.remove("hidden");$("userLabel").textContent="Non connecté";render()}
-client.auth.onAuthStateChange((event,authSession)=>{if(authSession&&authSession.user){if((!currentUser||currentUser.id!==authSession.user.id)&&enteringUserId!==authSession.user.id)setTimeout(()=>enterApp(authSession.user),0)}else if(currentUser)leaveApp()});
-(async()=>{const {data:{session:authSession},error}=await client.auth.getSession();if(error){showMessage("Erreur d’authentification : "+error.message,true);return}if(authSession)await enterApp(authSession.user);else{leaveApp();showMessage("Connecte-toi ou crée un compte pour commencer.")}})();
+const SUPABASE_URL="https://leccpiyvcknpgqmqcaqc.supabase.co";
+const SUPABASE_KEY="sb_publishable_BzpNUjEqfINYfTF6CPDwuQ_2pL50FUN";
+const client=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const $=id=>document.getElementById(id);
+const STATUS_TO_DB={"À tester":"to_test","En test":"testing","Fiable":"reliable","À vérifier":"review","Abandonné":"abandoned"};
+const STATUS_FROM_DB=Object.fromEntries(Object.entries(STATUS_TO_DB).map(([a,b])=>[b,a]));
+let currentUser=null,sites=[],busy=false;
+function safeUrl(v){try{const u=new URL(String(v||"").trim());return ["https:","http:"].includes(u.protocol)?u.href:""}catch{return ""}}
+function message(t,error=false){$("authMessage").textContent=t;$("authMessage").style.color=error?"#ff9aaa":"#a8f4d5"}
+function transferMessage(t){$("transferMessage").textContent=t;$("transferMessage").classList.remove("hidden")}
+function setBusy(v){busy=v;["signIn","signUp","saveButton","exportCsv","importCsv"].forEach(id=>{if($(id))$(id).disabled=v})}
+async function query(p){const {data,error}=await p;if(error)throw error;return data}
+function amount(v){return Number(v||0).toLocaleString("fr-FR",{maximumFractionDigits:8})}
+function download(name,content,type){const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
+function csvCell(v){return '"'+String(v??"").replace(/"/g,'""')+'"'}
+function exportCsv(){if(!currentUser){alert("Connecte-toi d’abord.");return}const cols=["name","url","status","goal","wallet","reward","fees","paid","notes"];const text=[cols.join(";"),...sites.map(s=>cols.map(k=>csvCell(s[k])).join(";"))].join("\r\n");download("haryfi-sites.csv","\uFEFF"+text,"text/csv;charset=utf-8");transferMessage(sites.length+" site(s) exporté(s). Transfère le fichier sur l’autre téléphone.")}
+function parseCsv(text,delimiter){const rows=[];let row=[],field="",quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){field+='"';i++}else if(c==='"')quoted=false;else field+=c}else if(c==='"')quoted=true;else if(c===delimiter){row.push(field);field=""}else if(c==="\n"){row.push(field.replace(/\r$/,""));rows.push(row);row=[];field=""}else field+=c}if(field.length||row.length){row.push(field.replace(/\r$/,""));rows.push(row)}return rows.filter(r=>r.some(x=>String(x).trim()))}
+async function syncTotal(siteId,kind,value){const old=await query(client.from("reward_transactions").select("id").eq("site_id",siteId).eq("kind",kind).eq("notes","panel2_total").limit(1));const n=Math.max(0,Number(value)||0);if(n===0){if(old.length)await query(client.from("reward_transactions").delete().eq("id",old[0].id));return}const p={site_id:siteId,kind,amount:n,currency:"USD",status:"confirmed",notes:"panel2_total",reference:"HaryFi Panel 2.0"};if(old.length)await query(client.from("reward_transactions").update(p).eq("id",old[0].id));else await query(client.from("reward_transactions").insert(p))}
+async function loadSites(){const [raw,tx]=await Promise.all([query(client.from("sites").select("*").order("created_at",{ascending:false})),query(client.from("reward_transactions").select("site_id,kind,amount,notes"))]);sites=raw.map(s=>({...s,status:STATUS_FROM_DB[s.status]||"À tester",wallet:s.wallet_label||"",reward:0,fees:0,paid:0}));tx.forEach(t=>{const s=sites.find(x=>x.id===t.site_id);if(!s)return;if(t.kind==="reward")s.reward+=Number(t.amount)||0;if(t.kind==="fee")s.fees+=Number(t.amount)||0;if(t.kind==="payout")s.paid+=Number(t.amount)||0});render()}
+function render(){if(!$("siteList"))return;$("statSites").textContent=sites.length;$("statRewards").textContent=amount(sites.reduce((n,s)=>n+s.reward,0));$("statPaid").textContent=amount(sites.reduce((n,s)=>n+s.paid,0));const term=$("search").value.trim().toLowerCase(),st=$("filterStatus").value;const filtered=sites.filter(s=>(!term||[s.name,s.url,s.goal,s.wallet,s.notes].join(" ").toLowerCase().includes(term))&&(!st||s.status===st));const list=$("siteList");list.replaceChildren();if(!filtered.length){const d=document.createElement("div");d.className="empty";d.textContent=sites.length?"Aucun site ne correspond à la recherche.":"Aucun site dans ce compte. Ajoute un site ou importe un CSV.";list.append(d);return}filtered.forEach(s=>{const card=document.createElement("article");card.className="site";const h=document.createElement("h3");h.textContent=s.name;const a=document.createElement("a");a.href=safeUrl(s.url)||"#";a.target="_blank";a.rel="noopener noreferrer";a.textContent=s.url;const tag=document.createElement("span");tag.className="tag";tag.textContent=s.status;const p=document.createElement("p");p.textContent=[s.goal,s.wallet?"Wallet : "+s.wallet:"",s.notes].filter(Boolean).join(" · ");const money=document.createElement("p");money.textContent="Récompenses : "+amount(s.reward)+" · Frais : "+amount(s.fees)+" · Paiements : "+amount(s.paid);const buttons=document.createElement("div");buttons.className="buttons";const edit=document.createElement("button");edit.className="secondary";edit.textContent="Modifier";edit.onclick=()=>fillForm(s);const del=document.createElement("button");del.className="red";del.textContent="Supprimer";del.onclick=()=>deleteSite(s);buttons.append(edit,del);card.append(h,a,document.createElement("br"),tag);if(p.textContent)card.append(p);card.append(money,buttons);list.append(card)})}
+function fillForm(s){$("editId").value=s.id;$("siteName").value=s.name;$("siteUrl").value=s.url;$("siteStatus").value=s.status;$("siteGoal").value=s.goal||"";$("siteWallet").value=s.wallet||"";$("siteReward").value=s.reward||0;$("siteFees").value=s.fees||0;$("sitePaid").value=s.paid||0;$("siteNotes").value=s.notes||"";$("formTitle").textContent="Modifier un site";$("saveButton").textContent="Enregistrer les modifications";$("cancelEdit").classList.remove("hidden");window.scrollTo({top:0,behavior:"smooth"})}
+function resetForm(){$("siteForm").reset();$("editId").value="";$("siteReward").value="0";$("siteFees").value="0";$("sitePaid").value="0";$("formTitle").textContent="＋ Ajouter un site";$("saveButton").textContent="Enregistrer le site";$("cancelEdit").classList.add("hidden")}
+async function saveSite(e){e.preventDefault();if(!currentUser)return alert("Connecte-toi d’abord.");const name=$("siteName").value.trim(),url=safeUrl($("siteUrl").value);if(!name||!url)return alert("Entre un nom et une adresse http(s) valide.");setBusy(true);try{const id=$("editId").value;const payload={name,url,goal:$("siteGoal").value.trim(),wallet_label:$("siteWallet").value.trim(),status:STATUS_TO_DB[$("siteStatus").value]||"to_test",notes:$("siteNotes").value.trim()};let saved;if(id)saved=(await query(client.from("sites").update(payload).eq("id",id).select().single()));else saved=await query(client.from("sites").insert(payload).select().single());await Promise.all([syncTotal(saved.id,"reward",$("siteReward").value),syncTotal(saved.id,"fee",$("siteFees").value),syncTotal(saved.id,"payout",$("sitePaid").value)]);resetForm();await loadSites()}catch(e){alert("Enregistrement impossible : "+e.message)}finally{setBusy(false)}}
+async function deleteSite(s){if(!confirm("Supprimer « "+s.name+" » ?"))return;try{await query(client.from("sites").delete().eq("id",s.id));await loadSites()}catch(e){alert("Suppression impossible : "+e.message)}}
+async function importCsvFile(file){if(!currentUser)throw Error("Connecte-toi d’abord.");let raw=(await file.text()).replace(/^\uFEFF/,"");let rows=parseCsv(raw,";");if(!rows.length)throw Error("Le fichier est vide.");if(!rows[0].some(x=>x.trim().toLowerCase()==="url"))rows=parseCsv(raw,",");const heads=rows.shift().map(x=>x.trim().toLowerCase());const ix=Object.fromEntries(heads.map((x,i)=>[x,i]));if(ix.name===undefined||ix.url===undefined)throw Error("Colonnes name et url introuvables.");const items=rows.map(r=>({name:String(r[ix.name]||"").trim(),url:safeUrl(r[ix.url]),status:String(r[ix.status]||"À tester").trim(),goal:String(r[ix.goal]||""),wallet:String(r[ix.wallet]||""),reward:Number(r[ix.reward]||0)||0,fees:Number(r[ix.fees]||0)||0,paid:Number(r[ix.paid]||0)||0,notes:String(r[ix.notes]||"")})).filter(s=>s.name&&s.url);if(!items.length)throw Error("Aucun site valide dans ce fichier.");const have=new Set(sites.map(s=>s.url));const fresh=items.filter(s=>!have.has(s.url));if(!fresh.length){transferMessage("Tous les sites du fichier sont déjà dans ton compte.");return}if(!confirm("Ajouter "+fresh.length+" site(s) à ce compte ?"))return;let ok=0,fail=0;for(const s of fresh){try{const saved=await query(client.from("sites").insert({name:s.name.slice(0,160),url:s.url,status:STATUS_TO_DB[s.status]||(["to_test","testing","reliable","review","abandoned"].includes(s.status)?s.status:"to_test"),goal:s.goal.slice(0,2000),wallet_label:s.wallet.slice(0,160),notes:s.notes.slice(0,10000)}).select().single());await Promise.all([syncTotal(saved.id,"reward",s.reward),syncTotal(saved.id,"fee",s.fees),syncTotal(saved.id,"payout",s.paid)]);ok++}catch(e){console.error(e);fail++}}await loadSites();transferMessage("Import terminé : "+ok+" site(s) ajouté(s)."+(fail?" "+fail+" échec(s).":""))}
+async function importJson(file){const obj=JSON.parse(await file.text());if(!Array.isArray(obj.sites))throw Error("Sauvegarde JSON invalide.");const lines=["name;url;status;goal;wallet;reward;fees;paid;notes",...obj.sites.map(s=>[s.name,s.url,s.status,s.goal,s.wallet,s.reward,s.fees,s.paid,s.notes].map(csvCell).join(";"))].join("\n");await importCsvFile(new File(["\uFEFF"+lines],"backup.csv",{type:"text/csv"}))}
+async function migrateOldLocal(){const already=await query(client.from("sites").select("id").limit(1));if(already.length)return;const candidates=[];try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);let p;try{p=JSON.parse(localStorage.getItem(key))}catch{continue}const arrs=[];if(Array.isArray(p))arrs.push(p);if(p&&typeof p==="object")Object.values(p).forEach(v=>{if(Array.isArray(v))arrs.push(v)});arrs.forEach(a=>{const valid=a.filter(s=>s&&typeof s==="object"&&(s.name||s.siteName)&&(s.url||s.siteUrl));if(valid.length)candidates.push({key,items:valid})})}}catch(e){console.warn(e)}candidates.sort((a,b)=>b.items.length-a.items.length);if(!candidates.length)return;const c=candidates[0];if(!confirm("Anciennes données trouvées sur ce téléphone ("+c.items.length+" sites). Les importer dans ton compte pour les synchroniser ?"))return;let count=0;for(const s of c.items){const url=safeUrl(s.url||s.siteUrl),name=String(s.name||s.siteName||"").trim();if(!url||!name)continue;try{await query(client.from("sites").insert({name:name.slice(0,160),url,status:STATUS_TO_DB[s.status||s.statut]||"to_test",goal:String(s.goal||"").slice(0,2000),wallet_label:String(s.wallet||s.wallet_label||"").slice(0,160),notes:String(s.notes||"").slice(0,10000)}));count++}catch(e){console.warn(e)}}if(count)alert(count+" ancien(s) site(s) synchronisé(s).")}
+async function enter(user){currentUser=user;$("authPanel").classList.add("hidden");$("appContent").classList.remove("hidden");$("userLabel").textContent=user.email||"Connecté";try{await migrateOldLocal();await loadSites()}catch(e){alert("Chargement impossible : "+e.message)}}
+function leave(){currentUser=null;sites=[];$("appContent").classList.add("hidden");$("authPanel").classList.remove("hidden")}
+$("signIn").onclick=async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value;if(!email||!password)return message("Entre ton e-mail et ton mot de passe.",true);setBusy(true);try{const {data,error}=await client.auth.signInWithPassword({email,password});if(error)throw error;await enter(data.user)}catch(e){message("Connexion impossible : "+e.message,true)}finally{setBusy(false)}};
+$("signUp").onclick=async()=>{const email=$("authEmail").value.trim(),password=$("authPassword").value;if(!email||password.length<8)return message("Entre un e-mail et un mot de passe d’au moins 8 caractères.",true);setBusy(true);try{const {data,error}=await client.auth.signUp({email,password,options:{data:{display_name:$("displayName").value.trim()}}});if(error)throw error;if(data.session)await enter(data.user);else message("Vérifie tes e-mails pour confirmer ton compte.")}catch(e){message("Inscription impossible : "+e.message,true)}finally{setBusy(false)}};
+$("signOut").onclick=async()=>{await client.auth.signOut();leave()};
+$("siteForm").addEventListener("submit",saveSite);$("cancelEdit").onclick=resetForm;$("search").oninput=render;$("filterStatus").onchange=render;
+$("exportCsv").onclick=exportCsv;$("importCsv").onclick=()=>{if(!currentUser)return alert("Connecte-toi d’abord.");$("importCsvFile").click()};
+$("importCsvFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importCsvFile(f)}catch(err){alert("Import CSV impossible : "+err.message)}finally{e.target.value=""}};
+$("exportJson").onclick=()=>download("haryfi-backup.json",JSON.stringify({sites},null,2),"application/json");
+$("importButton").onclick=()=>$("importFile").click();$("importFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{await importJson(f)}catch(err){alert("Import JSON impossible : "+err.message)}finally{e.target.value=""}};
+client.auth.onAuthStateChange((event,s)=>{if(s?.user&&!currentUser)setTimeout(()=>enter(s.user),0);else if(!s&&currentUser)leave()});
+(async()=>{try{const {data,error}=await client.auth.getSession();if(error)throw error;if(data.session)await enter(data.session.user)}catch(e){message("Erreur de connexion : "+e.message,true)}})();
