@@ -1,93 +1,34 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Panel 2.0 — Gestion des sites</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101827"><title>HaryFi Panel 2.0</title>
 <style>
-:root{--bg:#0b1120;--panel:#131d30;--panel2:#1b2940;--text:#edf3ff;--muted:#9aabc5;--blue:#5b8cff;--green:#35d49a;--red:#ff647c;--border:#293953}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,sans-serif}
-header{padding:22px;background:#101a2c;border-bottom:1px solid var(--border)}header h1{margin:0 0 7px;font-size:25px}header p{margin:0;color:var(--muted)}
-main{max-width:1250px;margin:auto;padding:20px}h2{font-size:19px;margin:0 0 16px}
-.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px}
-.card,.section{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:17px}
-.stat-label{color:var(--muted);font-size:13px}.stat{font-size:27px;font-weight:bold;margin-top:9px}
-.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
-input,select,textarea{width:100%;padding:11px;border-radius:8px;background:#0c1526;color:var(--text);border:1px solid var(--border);outline:none}
-textarea{min-height:75px;resize:vertical}input:focus,select:focus,textarea:focus{border-color:var(--blue)}
-button{border:0;border-radius:8px;padding:10px 13px;background:var(--blue);color:white;cursor:pointer;font-weight:600;margin:3px 2px}
-button:hover{filter:brightness(1.12)}button:disabled{opacity:.4;cursor:not-allowed}.secondary{background:var(--panel2);border:1px solid var(--border)}.danger{background:#812d43}.success{background:#176b52}
-.toolbar{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}.toolbar input{flex:1;min-width:180px}
-.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:850px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--border);font-size:13px}
-th{color:var(--muted);font-weight:600}td a{color:#91b4ff}.badge{display:inline-block;padding:5px 8px;border-radius:20px;font-size:11px;background:#263653}
-.badge.active{background:#14563f;color:#8af0c5}.badge.error{background:#682b3c;color:#ffb2c0}.muted{color:var(--muted)}
-#timer{font-size:32px;font-weight:bold;margin:12px 0}#viewer{width:100%;height:480px;border:1px solid var(--border);border-radius:10px;background:white}
-.small{font-size:12px;color:var(--muted)}.hidden{display:none!important}footer{text-align:center;color:var(--muted);padding:20px;font-size:12px}
-@media(max-width:760px){main{padding:12px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fields{grid-template-columns:1fr}header{padding:17px}#viewer{height:350px}.stat{font-size:22px}}
-
-.auth-panel{max-width:520px;margin:26px auto;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px}.auth-panel h2{margin-bottom:8px}.auth-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.auth-message{min-height:22px;font-size:13px;margin-top:12px;color:#8af0c5}.userbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px;padding:10px 13px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+:root{color-scheme:dark;--bg:#0b1120;--panel:#131d30;--panel2:#1b2940;--text:#edf3ff;--muted:#a4b2c9;--blue:#6794ff;--green:#35d49a;--red:#ff7589;--line:#2a3a54}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,Segoe UI,Arial,sans-serif}
+header{padding:20px 16px;background:#101a2c;border-bottom:1px solid var(--line)}.head,main{max-width:960px;margin:auto}.brand{font-size:25px;font-weight:800}.sub{color:var(--muted);font-size:14px}
+main{padding:16px}.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}.panel h2{font-size:19px;margin:0 0 12px}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 5px}input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;background:#0b1425;color:var(--text);font:inherit;min-width:0}textarea{min-height:75px}
+button{border:0;border-radius:10px;background:var(--blue);color:#071226;font-weight:750;font-size:14px;padding:12px 14px;cursor:pointer;min-height:44px}.secondary{background:var(--panel2);border:1px solid var(--line);color:var(--text)}.green{background:var(--green);color:#06251a}.red{background:#7b2b41;color:white}.buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.buttons button{flex:1}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:14px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px}.stat b{display:block;font-size:23px}.stat span{color:var(--muted);font-size:12px}.site{padding:14px 0;border-top:1px solid var(--line)}.site:first-child{border-top:0}.site h3{font-size:17px;margin:0 0 4px;overflow-wrap:anywhere}.site a{color:#9dbbff;overflow-wrap:anywhere;font-size:13px}.site p{margin:7px 0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}.tag{display:inline-block;padding:4px 8px;border-radius:99px;background:var(--panel2);font-size:12px;margin-top:7px}.userbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.muted{color:var(--muted)}.hidden{display:none!important}.transfer{border:2px solid var(--blue)}.transfer p{color:var(--muted);font-size:14px}.searchrow{display:grid;grid-template-columns:1fr 150px;gap:8px}.empty{padding:20px 0;color:var(--muted);text-align:center}.notice{padding:10px 12px;border-radius:9px;background:#182740;color:#cbdcff;margin-top:10px;font-size:13px;overflow-wrap:anywhere}
+@media(min-width:700px){main{padding:24px}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.buttons button{flex:initial}}@media(max-width:420px){.stats{grid-template-columns:1fr 1fr}.stats .stat:last-child{grid-column:1/-1}.searchrow{grid-template-columns:1fr}.panel{padding:13px}}
 </style>
 </head>
 <body>
-<header><h1>⚡ Panel 2.0</h1><p>Gestion des sites · Sessions · Récompenses · Statistiques</p></header>
+<header><div class="head"><div class="brand">⚡ HaryFi Panel 2.0</div><div class="sub">Tes tes sites · Suivi personnel · Synchronisation entre téléphones</div></div></header>
 <main>
-<section id="authPanel" class="auth-panel">
-<h2>Connexion à Panel 2.0</h2>
-<p class="muted">Connecte-toi ou crée un compte pour enregistrer tes sites, sessions et récompenses dans Supabase et les retrouver sur tes autres appareils.</p>
-<div class="fields">
-<div><label for="displayName">Nom affiché (inscription)</label><input id="displayName" autocomplete="name" maxlength="100" placeholder="Ton nom"></div>
-<div><label for="authEmail">Adresse e-mail</label><input id="authEmail" type="email" autocomplete="email" required placeholder="toi@exemple.com"></div>
-<div style="grid-column:1/-1"><label for="authPassword">Mot de passe (8 caractères minimum)</label><input id="authPassword" type="password" autocomplete="current-password" minlength="8" required placeholder="Mot de passe"></div>
-</div>
-<div class="auth-actions"><button id="signIn">Se connecter</button><button id="signUp" class="success">Créer un compte</button></div>
-<p id="authMessage" class="auth-message" role="status" aria-live="polite"></p>
+<section id="authPanel" class="panel">
+<h2>Connexion</h2><p class="muted">Connecte-toi avec le même compte sur chaque appareil pour retrouver les mêmes sites.</p>
+<div class="grid"><div><label for="authEmail">Adresse e-mail</label><input id="authEmail" type="email" autocomplete="email" placeholder="toi@exemple.com"></div><div><label for="authPassword">Mot de passe</label><input id="authPassword" type="password" autocomplete="current-password" placeholder="8 caractères minimum"></div></div>
+<label for="displayName">Nom (uniquement pour créer un compte)</label><input id="displayName" placeholder="Ton nom">
+<div class="buttons"><button id="signIn">Se connecter</button><button id="signUp" class="secondary">Créer un compte</button></div><div id="authMessage" class="notice" role="status">Entre tes identifiants.</div>
 </section>
 <div id="appContent" class="hidden">
-<div class="userbar"><span>Compte connecté : <strong id="userLabel"></strong></span><button id="signOut" class="secondary">Se déconnecter</button></div>
-<section class="section" id="transferSection" style="margin-bottom:18px;border:2px solid var(--blue)">
-<h2>📲 Transférer tes sites vers un autre téléphone</h2>
-<p class="muted">Sur le téléphone où tes sites sont visibles, appuie sur <strong>Exporter CSV</strong>. Transfère ensuite le fichier sur l’autre téléphone, connecte-toi au même compte et appuie sur <strong>Importer CSV</strong>.</p>
-<div class="toolbar" style="margin-bottom:0">
-<button id="exportCsv" class="success">⬇️ Exporter CSV</button>
-<button id="importCsv" class="secondary">⬆️ Importer CSV</button>
-<input id="importCsvFile" type="file" accept=".csv,text/csv" hidden>
-</div>
-</section>
-<div class="grid">
-<div class="card"><div class="stat-label">Sites enregistrés</div><div class="stat" id="statSites">0</div></div>
-<div class="card"><div class="stat-label">Temps total suivi</div><div class="stat" id="statTime">00:00:00</div></div>
-<div class="card"><div class="stat-label">Récompenses enregistrées</div><div class="stat" id="statRewards">0,00</div></div>
-<div class="card"><div class="stat-label">Paiements reçus</div><div class="stat" id="statPaid">0,00</div></div>
-</div>
-<section class="section">
-<h2 id="formTitle">＋ Ajouter un site</h2>
-<form id="siteForm" novalidate><input type="hidden" id="editId">
-<div class="fields">
-<div><label for="siteName">Nom du site *</label><input id="siteName" required placeholder="Ex. Exemple Faucet"></div>
-<div><label for="siteUrl">URL du site *</label><input id="siteUrl" type="url" required placeholder="https://example.com"></div>
-<div><label for="siteGoal">Objectif / activité</label><input id="siteGoal" placeholder="Ex. Tester le système de récompenses"></div>
-<div><label for="siteWallet">Portefeuille utilisé</label><input id="siteWallet" placeholder="Ex. Mon portefeuille"></div>
-<div><label for="siteStatus">Statut</label><select id="siteStatus"><option>À tester</option><option>En test</option><option>Fiable</option><option>À vérifier</option><option>Abandonné</option></select></div>
-<div><label for="siteReward">Récompenses enregistrées</label><input id="siteReward" type="number" min="0" step="any" value="0"></div>
-<div><label for="siteFees">Frais enregistrés</label><input id="siteFees" type="number" min="0" step="any" value="0"></div>
-<div><label for="sitePaid">Paiements reçus</label><input id="sitePaid" type="number" min="0" step="any" value="0"></div>
-</div>
-<p><label for="siteNotes">Notes / problèmes rencontrés</label><textarea id="siteNotes" placeholder="Date du test, erreur, retrait, preuve de paiement..."></textarea></p>
-<button type="submit" id="saveButton">Enregistrer le site</button><button type="button" class="secondary hidden" id="cancelEdit">Annuler la modification</button>
-</form></section>
-<section class="section"><h2>📊 Mes sites</h2>
-<div class="toolbar"><input id="search" placeholder="Rechercher un site..."><select id="filterStatus" style="max-width:200px"><option value="">Tous les statuts</option><option>À tester</option><option>En test</option><option>Fiable</option><option>À vérifier</option><option>Abandonné</option></select></div>
-<div class="table-wrap"><table><thead><tr><th>Site</th><th>Statut</th><th>Temps suivi</th><th>Récompenses</th><th>Actions</th></tr></thead><tbody id="siteRows"></tbody></table></div>
-<p class="small">Les récompenses, frais et paiements sont les montants que tu saisis manuellement.</p></section>
-<section class="section"><h2>⏱️ Session de travail</h2><div id="sessionSite" class="muted">Aucun site sélectionné.</div><div id="timer">00:00:00</div>
-<div class="toolbar"><button id="startSession" disabled>▶ Démarrer</button><button id="pauseSession" class="secondary" disabled>⏸ Pause</button><button id="resumeSession" class="success" disabled>▶ Reprendre</button><button id="finishSession" class="danger" disabled>■ Terminer</button></div>
-<p class="small">Le chronomètre mesure le temps actif. Il ne vérifie pas l'activité réelle sur le site.</p></section>
-<section class="section"><h2>🌐 Navigateur intégré</h2><p class="small">Certains sites refusent l'affichage intégré. Dans ce cas, utilise « Ouvrir » dans la liste des sites.</p><div class="toolbar"><button id="openExternal" class="secondary">Ouvrir dans un nouvel onglet</button></div><iframe id="viewer" title="Site sélectionné" sandbox="allow-forms allow-scripts allow-same-origin allow-popups"></iframe></section>
-<section class="section"><h2>💾 Sauvegarde et données</h2><div class="toolbar"><button id="exportJson">Télécharger la sauvegarde JSON</button><button class="secondary" id="importButton">Importer une sauvegarde</button><input type="file" id="importFile" accept=".json,application/json" class="hidden"><button class="danger" id="clearData">Tout effacer</button></div><p class="small">Les données enregistrées après connexion sont stockées dans Supabase et associées à ton compte. Tu peux aussi télécharger une sauvegarde JSON pour conserver une copie.</p></section>
-</div>
-</main><footer>Panel 2.0 · Gestion personnelle des tests et récompenses</footer>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./app.js?v=transferpanel1"></script>
-</body>
-</html>
+<section class="panel"><div class="userbar"><span class="muted">Connecté : <b id="userLabel"></b></span><button id="signOut" class="secondary">Déconnexion</button></div></section>
+<section class="panel transfer"><h2>📲 Transférer tes sites</h2><p><b>Téléphone 1 :</b> appuie sur « Exporter CSV » et conserve le fichier. <b>Téléphone 2 :</b> connecte-toi au même compte et appuie sur « Importer CSV ». Les sites déjà présents ne seront pas ajoutés une deuxième fois.</p><div class="buttons"><button id="exportCsv" class="green">⬇️ Exporter CSV</button><button id="importCsv" class="secondary">⬆️ Importer CSV</button><input id="importCsvFile" type="file" accept=".csv,text/csv" class="hidden"></div><div id="transferMessage" class="notice hidden"></div></section>
+<div class="stats"><div class="stat"><span>Sites enregistrés</span><b id="statSites">0</b></div><div class="stat"><span>Récompenses</span><b id="statRewards">0</b></div><div class="stat"><span>Paiements reçus</span><b id="statPaid">0</b></div></div>
+<section class="panel"><h2 id="formTitle">＋ Ajouter un site</h2><form id="siteForm"><input type="hidden" id="editId"><div class="grid"><div><label for="siteName">Nom du site *</label><input id="siteName" required maxlength="160" placeholder="Nom du site"></div><div><label for="siteUrl">Adresse du site *</label><input id="siteUrl" type="url" required placeholder="https://exemple.com"></div><div><label for="siteStatus">Statut</label><select id="siteStatus"><option>À tester</option><option>En test</option><option>Fiable</option><option>À vérifier</option><option>Abandonné</option></select></div><div><label for="siteGoal">Objectif</label><input id="siteGoal" placeholder="Faucet, offre, bonus…"></div><div><label for="siteWallet">Portefeuille</label><input id="siteWallet" placeholder="Nom du wallet"></div><div><label for="siteReward">Récompenses</label><input id="siteReward" type="number" min="0" step="any" value="0"></div><div><label for="siteFees">Frais</label><input id="siteFees" type="number" min="0" step="any" value="0"></div><div><label for="sitePaid">Paiements reçus</label><input id="sitePaid" type="number" min="0" step="any" value="0"></div></div><label for="siteNotes">Notes</label><textarea id="siteNotes" placeholder="Informations utiles…"></textarea><div class="buttons"><button id="saveButton" type="submit">Enregistrer le site</button><button id="cancelEdit" type="button" class="secondary hidden">Annuler</button></div></form></section>
+<section class="panel"><h2>🌐 Mes sites</h2><div class="searchrow"><input id="search" placeholder="Rechercher un site…"><select id="filterStatus"><option value="">Tous les statuts</option><option>À tester</option><option>En test</option><option>Fiable</option><option>À vérifier</option><option>Abandonné</option></select></div><div id="siteList"><div class="empty">Chargement…</div></div></section>
+<section class="panel"><h2>💾 Sauvegarde complète</h2><p class="muted">Garde une copie de sécurité en JSON en plus du CSV.</p><div class="buttons"><button id="exportJson" class="secondary">Télécharger JSON</button><button id="importButton" class="secondary">Importer JSON</button><input id="importFile" type="file" accept=".json,application/json" class="hidden"></div></section>
+</div></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="./app.js?v=fromzero1"></script>
+</body></html>
